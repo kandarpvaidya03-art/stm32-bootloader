@@ -5,6 +5,8 @@
 #include "selftest.h"
 #include "update.h"
 #include "image.h"
+#include "image_sig.h"
+#include "pubkey.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
@@ -110,6 +112,10 @@ static int slot_a_image_ok(void)
 {
     image_status_t status = image_verify((const uint8_t *)SLOT_A_BASE, SLOT_SIZE, 0);
 
+    if (status == IMAGE_OK && !image_signature_ok((const uint8_t *)SLOT_A_BASE, boot_public_key)) {
+        uart_puts("boot: slot A signature invalid\r\n");
+        return 0;
+    }
     if (status == IMAGE_OK) {
         return 1;
     }

@@ -134,7 +134,7 @@ def cmd_send(link, args):
         print("\rsent %d / %d bytes" % (offset, len(image)), end="", flush=True)
     print()
 
-    request(link, MSG_END, b"", timeout=5)
+    request(link, MSG_END, b"", timeout=30)
     print("image accepted: CRC matches in flash")
     print("transfer took %.2f s" % (time.monotonic() - started))
     return 0

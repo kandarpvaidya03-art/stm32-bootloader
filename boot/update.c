@@ -2,6 +2,8 @@
 #include "crc32.h"
 #include "flash.h"
 #include "image.h"
+#include "image_sig.h"
+#include "pubkey.h"
 #include "uart.h"
 
 #define SLOT_B_BASE   0x08040000u
@@ -21,6 +23,7 @@
 #define ERR_OFFSET     0x24u
 #define ERR_IMAGE_CRC  0x25u
 #define ERR_IMAGE_INVALID 0x26u
+#define ERR_SIGNATURE 0x27u
 
 static struct {
     int active;
@@ -143,6 +146,10 @@ static void on_end(void)
     }
     if (image_verify((const uint8_t *)SLOT_B_BASE, SLOT_SIZE, 0) != IMAGE_OK) {
         nack(ERR_IMAGE_INVALID);
+        return;
+    }
+    if (!image_signature_ok((const uint8_t *)SLOT_B_BASE, boot_public_key)) {
+        nack(ERR_SIGNATURE);
         return;
     }
     uart_puts("update: image stored in slot B, CRC ok\r\n");
