@@ -4,7 +4,7 @@ CFLAGS  := -mcpu=cortex-m4 -mthumb -Og -g -Wall -Wextra -ffreestanding -Icommon
 LDFLAGS := -nostartfiles
 OPENOCD := openocd -f board/st_nucleo_f4.cfg
 
-all: build/boot.elf build/app.elf
+all: build/boot.elf build/app.elf build/app.bin
 
 build/%.o: %.c
 	mkdir -p $(dir $@)
@@ -14,7 +14,7 @@ build/%.ld: ld/%.ld ld/sections.ld
 	mkdir -p build
 	cat $^ > $@
 
-build/boot.elf: build/common/startup.o build/common/uart.o build/boot/main.o build/boot/selftest.o build/common/flash.o build/common/tick.o build/common/frame.o build/common/crc32.o build/boot.ld
+build/boot.elf: build/common/startup.o build/common/uart.o build/boot/main.o build/boot/selftest.o build/boot/update.o build/common/flash.o build/common/tick.o build/common/frame.o build/common/crc32.o build/boot.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) -T build/boot.ld -Wl,-Map=build/boot.map $(filter %.o,$^) -o $@
 	$(SIZE) $@
 
@@ -46,3 +46,6 @@ test:
 	./build/host/test_frame
 
 .PHONY: test
+
+build/%.bin: build/%.elf
+	arm-none-eabi-objcopy -O binary $< $@

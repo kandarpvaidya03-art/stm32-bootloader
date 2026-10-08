@@ -3,6 +3,7 @@
 #include "tick.h"
 #include "frame.h"
 #include "selftest.h"
+#include "update.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
@@ -25,7 +26,7 @@
 
 static frame_parser_t parser;
 
-static void send_frame(uint8_t type, const uint8_t *payload, uint16_t len)
+void send_frame(uint8_t type, const uint8_t *payload, uint16_t len)
 {
     uint8_t out[FRAME_OVERHEAD + 16u];
     size_t n = frame_encode(type, payload, len, out, sizeof out);
@@ -39,7 +40,7 @@ static void handle_frame(void)
     if (parser.type == MSG_PING) {
         const uint8_t version = PROTOCOL_VERSION;
         send_frame(MSG_ACK, &version, 1);
-    } else {
+    } else if (update_handle_frame(&parser) == 0) {
         const uint8_t code = ERR_UNKNOWN_TYPE;
         send_frame(MSG_NACK, &code, 1);
     }
