@@ -35,3 +35,12 @@ clean:
 	rm -rf build
 
 .PHONY: all flash-boot flash-app erase clean
+
+HOSTCC := gcc
+
+test:
+	mkdir -p build/host
+	$(HOSTCC) -Wall -Wextra -Icommon tests/test_crc32.c common/crc32.c -o build/host/test_crc32
+	./build/host/test_crc32
+
+.PHONY: test
