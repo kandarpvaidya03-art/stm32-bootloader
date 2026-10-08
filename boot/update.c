@@ -1,6 +1,7 @@
 #include "update.h"
 #include "crc32.h"
 #include "flash.h"
+#include "image.h"
 #include "uart.h"
 
 #define SLOT_B_BASE   0x08040000u
@@ -19,6 +20,7 @@
 #define ERR_STATE      0x23u
 #define ERR_OFFSET     0x24u
 #define ERR_IMAGE_CRC  0x25u
+#define ERR_IMAGE_INVALID 0x26u
 
 static struct {
     int active;
@@ -137,6 +139,10 @@ static void on_end(void)
     uint32_t crc = crc32_update(0, (const uint8_t *)SLOT_B_BASE, up.size);
     if (crc != up.crc) {
         nack(ERR_IMAGE_CRC);
+        return;
+    }
+    if (image_verify((const uint8_t *)SLOT_B_BASE, SLOT_SIZE, 0) != IMAGE_OK) {
+        nack(ERR_IMAGE_INVALID);
         return;
     }
     uart_puts("update: image stored in slot B, CRC ok\r\n");

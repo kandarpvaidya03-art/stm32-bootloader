@@ -4,13 +4,16 @@
 #include "frame.h"
 #include "selftest.h"
 #include "update.h"
+#include "image.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
 #define GPIOA_ODR   (*(volatile uint32_t *)0x40020014u)
 #define SCB_VTOR    (*(volatile uint32_t *)0xE000ED08u)
 
-#define APP_BASE  0x08020000u
+#define SLOT_A_BASE 0x08020000u
+#define SLOT_SIZE   0x20000u
+#define APP_BASE  (SLOT_A_BASE + IMAGE_HEADER_SIZE)
 #define APP_END   0x08040000u
 #define RAM_START 0x20000000u
 #define RAM_END   0x20018000u
@@ -103,6 +106,19 @@ __attribute__((noreturn)) static void jump_to_app(void)
     __builtin_unreachable();
 }
 
+static int slot_a_image_ok(void)
+{
+    image_status_t status = image_verify((const uint8_t *)SLOT_A_BASE, SLOT_SIZE, 0);
+
+    if (status == IMAGE_OK) {
+        return 1;
+    }
+    uart_puts("boot: slot A image rejected, status ");
+    uart_putc((char)(48 + (int)status));
+    uart_puts("\r\n");
+    return 0;
+}
+
 int main(void)
 {
     RCC_AHB1ENR |= (1u << 0);
@@ -118,7 +134,7 @@ int main(void)
     tick_init();
     listen_for_host(LISTEN_WINDOW_MS);
 
-    if (app_looks_valid()) {
+    if (slot_a_image_ok() && app_looks_valid()) {
         tick_stop(); /* hand the timer back in its reset state */
         uart_puts("boot: jumping to slot A\r\n");
         jump_to_app();

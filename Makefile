@@ -4,7 +4,7 @@ CFLAGS  := -mcpu=cortex-m4 -mthumb -Og -g -Wall -Wextra -ffreestanding -Icommon
 LDFLAGS := -nostartfiles
 OPENOCD := openocd -f board/st_nucleo_f4.cfg
 
-all: build/boot.elf build/app.elf build/app.bin
+all: build/boot.elf build/app.elf build/app.bin build/app-image.bin
 
 build/%.o: %.c
 	mkdir -p $(dir $@)
@@ -14,7 +14,7 @@ build/%.ld: ld/%.ld ld/sections.ld
 	mkdir -p build
 	cat $^ > $@
 
-build/boot.elf: build/common/startup.o build/common/uart.o build/boot/main.o build/boot/selftest.o build/boot/update.o build/common/flash.o build/common/tick.o build/common/frame.o build/common/crc32.o build/boot.ld
+build/boot.elf: build/common/startup.o build/common/uart.o build/boot/main.o build/boot/selftest.o build/boot/update.o build/common/flash.o build/common/tick.o build/common/frame.o build/common/crc32.o build/common/image.o build/common/sha256.o build/boot.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) -T build/boot.ld -Wl,-Map=build/boot.map $(filter %.o,$^) -o $@
 	$(SIZE) $@
 
@@ -25,8 +25,8 @@ build/app.elf: build/common/startup.o build/common/uart.o build/app/main.o build
 flash-boot: build/boot.elf
 	$(OPENOCD) -c "program build/boot.elf verify reset exit"
 
-flash-app: build/app.elf
-	$(OPENOCD) -c "program build/app.elf verify reset exit"
+flash-app: build/app-image.bin
+	$(OPENOCD) -c "program build/app-image.bin 0x08020000 verify reset exit"
 
 erase:
 	$(OPENOCD) -c "init" -c "reset halt" -c "stm32f4x mass_erase 0" -c "exit"
@@ -46,8 +46,15 @@ test:
 	./build/host/test_frame
 	$(HOSTCC) -Wall -Wextra -Icommon tests/test_sha256.c common/sha256.c -o build/host/test_sha256
 	./build/host/test_sha256
+	$(HOSTCC) -Wall -Wextra -Icommon tests/test_image.c common/image.c common/sha256.c -o build/host/test_image
+	./build/host/test_image
 
 .PHONY: test
 
 build/%.bin: build/%.elf
 	arm-none-eabi-objcopy -O binary $< $@
+
+PYTHON := python3
+
+build/app-image.bin: build/app.bin tools/imgtool.py
+	$(PYTHON) tools/imgtool.py pack build/app.bin $@ --version 1
