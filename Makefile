@@ -48,6 +48,8 @@ test:
 	./build/host/test_sha256
 	$(HOSTCC) -Wall -Wextra -Icommon tests/test_image.c common/image.c common/sha256.c -o build/host/test_image
 	./build/host/test_image
+	$(HOSTCC) -Wall -Wextra -Icommon -Ithird_party/micro-ecc tests/test_image_sig.c common/image_sig.c common/sha256.c third_party/micro-ecc/uECC.c -o build/host/test_image_sig
+	./build/host/test_image_sig
 
 .PHONY: test
 
