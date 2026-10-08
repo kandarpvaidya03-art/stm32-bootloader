@@ -42,5 +42,7 @@ test:
 	mkdir -p build/host
 	$(HOSTCC) -Wall -Wextra -Icommon tests/test_crc32.c common/crc32.c -o build/host/test_crc32
 	./build/host/test_crc32
+	$(HOSTCC) -Wall -Wextra -Icommon tests/test_frame.c common/frame.c common/crc32.c -o build/host/test_frame
+	./build/host/test_frame
 
 .PHONY: test
