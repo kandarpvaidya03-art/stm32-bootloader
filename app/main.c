@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "uart.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
@@ -12,6 +13,8 @@ int main(void)
     GPIOA_MODER &= ~(3u << 10); /* PA5: clear mode bits */
     GPIOA_MODER |= (1u << 10);  /* PA5: general-purpose output */
 
+    uart_init();
+    uart_puts("app: running from slot A\r\n");
     for (;;) {
         GPIOA_ODR ^= (1u << 5);
         for (volatile uint32_t i = 0; i < 2000000u; i++) {

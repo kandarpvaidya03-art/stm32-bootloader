@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "uart.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
@@ -63,12 +64,16 @@ int main(void)
     GPIOA_MODER &= ~(3u << 10);
     GPIOA_MODER |= (1u << 10);
 
+    uart_init();
+    uart_puts("boot: started\r\n");
     blink_fast(5);
 
     if (app_looks_valid()) {
+        uart_puts("boot: jumping to slot A\r\n");
         jump_to_app();
     }
 
+    uart_puts("boot: no valid app, staying in bootloader\r\n");
     for (;;) {
         blink_fast(1);
     }
