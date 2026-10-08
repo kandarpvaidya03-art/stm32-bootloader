@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "uart.h"
+#include "selftest.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
@@ -67,6 +68,8 @@ int main(void)
     uart_init();
     uart_puts("boot: started\r\n");
     blink_fast(5);
+
+    selftest_if_button_held();
 
     if (app_looks_valid()) {
         uart_puts("boot: jumping to slot A\r\n");

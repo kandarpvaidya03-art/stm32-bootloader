@@ -14,7 +14,7 @@ build/%.ld: ld/%.ld ld/sections.ld
 	mkdir -p build
 	cat $^ > $@
 
-build/boot.elf: build/common/startup.o build/common/uart.o build/boot/main.o build/boot.ld
+build/boot.elf: build/common/startup.o build/common/uart.o build/boot/main.o build/boot/selftest.o build/common/flash.o build/boot.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) -T build/boot.ld -Wl,-Map=build/boot.map $(filter %.o,$^) -o $@
 	$(SIZE) $@
 
