@@ -14,7 +14,7 @@ int main(void)
 
     for (;;) {
         GPIOA_ODR ^= (1u << 5);
-        for (volatile uint32_t i = 0; i < 400000u; i++) {
+        for (volatile uint32_t i = 0; i < 2000000u; i++) {
         }
     }
 }
