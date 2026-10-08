@@ -1,24 +1,22 @@
 #include <stdint.h>
-#include "uart.h"
-#include "tick.h"
+#include "bootstate.h"
 #include "frame.h"
-#include "selftest.h"
-#include "update.h"
 #include "image.h"
-#include "image_sig.h"
-#include "pubkey.h"
+#include "install.h"
+#include "layout.h"
+#include "selftest.h"
+#include "tick.h"
+#include "uart.h"
+#include "update.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
 #define GPIOA_MODER (*(volatile uint32_t *)0x40020000u)
 #define GPIOA_ODR   (*(volatile uint32_t *)0x40020014u)
 #define SCB_VTOR    (*(volatile uint32_t *)0xE000ED08u)
+#define SCB_AIRCR   (*(volatile uint32_t *)0xE000ED0Cu)
 
-#define SLOT_A_BASE 0x08020000u
-#define SLOT_SIZE   0x20000u
-#define APP_BASE  (SLOT_A_BASE + IMAGE_HEADER_SIZE)
-#define APP_END   0x08040000u
-#define RAM_START 0x20000000u
-#define RAM_END   0x20018000u
+#define APP_VECTORS (SLOT_A_BASE + IMAGE_HEADER_SIZE)
+#define APP_END     (SLOT_A_BASE + SLOT_SIZE)
 
 #define LISTEN_WINDOW_MS 500u
 #define PROTOCOL_VERSION 1u
@@ -76,53 +74,47 @@ static void listen_for_host(uint32_t window_ms)
     }
 }
 
-static int app_looks_valid(void)
+static int update_requested(void)
 {
-    const uint32_t *vt = (const uint32_t *)APP_BASE;
+    boot_flags_t flags;
+    bootstate_read(&flags);
+    return flags.requested && !flags.trial_started;
+}
+
+__attribute__((noreturn)) static void system_reset(void)
+{
+    SCB_AIRCR = 0x05FA0004u;
+    for (;;) {
+    }
+}
+
+static int vectors_look_valid(void)
+{
+    const uint32_t *vt = (const uint32_t *)APP_VECTORS;
     uint32_t sp = vt[0];
     uint32_t pc = vt[1];
 
     if (sp <= RAM_START || sp > RAM_END) {
-        return 0; /* stack pointer not in RAM (erased flash reads 0xFFFFFFFF) */
+        return 0;
     }
-    if (pc < APP_BASE || pc >= APP_END) {
-        return 0; /* reset address not inside the slot */
+    if (pc < APP_VECTORS || pc >= APP_END) {
+        return 0;
     }
-    if ((pc & 1u) == 0u) {
-        return 0; /* Cortex-M code addresses always have bit 0 set */
-    }
-    return 1;
+    return (pc & 1u) != 0u; /* Cortex-M code addresses always have bit 0 set */
 }
 
 __attribute__((noreturn)) static void jump_to_app(void)
 {
-    const uint32_t *vt = (const uint32_t *)APP_BASE;
+    const uint32_t *vt = (const uint32_t *)APP_VECTORS;
     uint32_t sp = vt[0];
     uint32_t pc = vt[1];
 
-    SCB_VTOR = APP_BASE;
+    SCB_VTOR = APP_VECTORS;
     __asm volatile("msr msp, %0\n"
                    "bx %1\n"
                    :
                    : "r"(sp), "r"(pc));
     __builtin_unreachable();
-}
-
-static int slot_a_image_ok(void)
-{
-    image_status_t status = image_verify((const uint8_t *)SLOT_A_BASE, SLOT_SIZE, 0);
-
-    if (status == IMAGE_OK && !image_signature_ok((const uint8_t *)SLOT_A_BASE, boot_public_key)) {
-        uart_puts("boot: slot A signature invalid\r\n");
-        return 0;
-    }
-    if (status == IMAGE_OK) {
-        return 1;
-    }
-    uart_puts("boot: slot A image rejected, status ");
-    uart_putc((char)(48 + (int)status));
-    uart_puts("\r\n");
-    return 0;
 }
 
 int main(void)
@@ -137,18 +129,28 @@ int main(void)
 
     selftest_if_button_held();
 
+    install_run_pending();
+
     tick_init();
     listen_for_host(LISTEN_WINDOW_MS);
+    if (update_requested()) {
+        uart_puts("boot: restarting to install\r\n");
+        system_reset();
+    }
 
-    if (slot_a_image_ok() && app_looks_valid()) {
+    if (slot_image_ok(SLOT_A_BASE) && vectors_look_valid()) {
         tick_stop(); /* hand the timer back in its reset state */
         uart_puts("boot: jumping to slot A\r\n");
         jump_to_app();
     }
 
-    uart_puts("boot: no valid app, waiting for host\r\n");
+    uart_puts("boot: no valid signed image in slot A, waiting for host\r\n");
     for (;;) {
         listen_for_host(200u);
         GPIOA_ODR ^= (1u << 5);
+        if (update_requested()) {
+            uart_puts("boot: restarting to install\r\n");
+            system_reset();
+        }
     }
 }

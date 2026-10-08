@@ -137,6 +137,13 @@ def cmd_send(link, args):
     request(link, MSG_END, b"", timeout=30)
     print("image accepted: CRC matches in flash")
     print("transfer took %.2f s" % (time.monotonic() - started))
+    print("--- device output for 40 s (Ctrl+C to stop early) ---", flush=True)
+    watch_until = time.monotonic() + 40
+    while time.monotonic() < watch_until:
+        data = link.port.read(256)
+        if data:
+            sys.stdout.write(data.decode(errors="replace"))
+            sys.stdout.flush()
     return 0
 
 

@@ -1,6 +1,7 @@
 #include "update.h"
 #include "crc32.h"
 #include "flash.h"
+#include "bootstate.h"
 #include "image.h"
 #include "image_sig.h"
 #include "pubkey.h"
@@ -24,6 +25,7 @@
 #define ERR_IMAGE_CRC  0x25u
 #define ERR_IMAGE_INVALID 0x26u
 #define ERR_SIGNATURE 0x27u
+#define ERR_BUSY 0x28u
 
 static struct {
     int active;
@@ -61,6 +63,17 @@ static void on_start(const frame_parser_t *f)
     uint32_t crc = rd32(f->payload + 4);
     if (size == 0u || size > SLOT_SIZE) {
         nack(ERR_TOO_BIG);
+        return;
+    }
+
+    boot_flags_t flags;
+    bootstate_read(&flags);
+    if (flags.requested) {
+        nack(ERR_BUSY);
+        return;
+    }
+    if (bootstate_clear() != 0) {
+        nack(ERR_FLASH);
         return;
     }
 
@@ -152,7 +165,11 @@ static void on_end(void)
         nack(ERR_SIGNATURE);
         return;
     }
-    uart_puts("update: image stored in slot B, CRC ok\r\n");
+    if (bootstate_set(BOOTSTATE_REQUESTED) != 0) {
+        nack(ERR_FLASH);
+        return;
+    }
+    uart_puts("update: image verified, install requested\r\n");
     ack_u32(up.size);
 }
 
