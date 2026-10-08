@@ -1,5 +1,7 @@
 #include <stdint.h>
 #include "uart.h"
+#include "tick.h"
+#include "frame.h"
 #include "selftest.h"
 
 #define RCC_AHB1ENR (*(volatile uint32_t *)0x40023830u)
@@ -12,17 +14,59 @@
 #define RAM_START 0x20000000u
 #define RAM_END   0x20018000u
 
-static void delay(uint32_t n)
+#define LISTEN_WINDOW_MS 500u
+#define PROTOCOL_VERSION 1u
+
+#define MSG_PING 0x01u
+#define MSG_ACK  0x81u
+#define MSG_NACK 0x82u
+
+#define ERR_UNKNOWN_TYPE 0x10u
+
+static frame_parser_t parser;
+
+static void send_frame(uint8_t type, const uint8_t *payload, uint16_t len)
 {
-    for (volatile uint32_t i = 0; i < n; i++) {
+    uint8_t out[FRAME_OVERHEAD + 16u];
+    size_t n = frame_encode(type, payload, len, out, sizeof out);
+    for (size_t i = 0; i < n; i++) {
+        uart_putc((char)out[i]);
     }
 }
 
-static void blink_fast(uint32_t times)
+static void handle_frame(void)
 {
-    for (uint32_t i = 0; i < times * 2u; i++) {
-        GPIOA_ODR ^= (1u << 5);
-        delay(100000u);
+    if (parser.type == MSG_PING) {
+        const uint8_t version = PROTOCOL_VERSION;
+        send_frame(MSG_ACK, &version, 1);
+    } else {
+        const uint8_t code = ERR_UNKNOWN_TYPE;
+        send_frame(MSG_NACK, &code, 1);
+    }
+}
+
+/* Listens until the line has been quiet for window_ms.
+ * Every valid frame restarts the window. */
+static void listen_for_host(uint32_t window_ms)
+{
+    uint32_t remaining = window_ms;
+
+    frame_parser_reset(&parser);
+    while (remaining != 0u) {
+        uint8_t byte;
+        if (uart_read_byte(&byte)) {
+            frame_result_t result = frame_parser_feed(&parser, byte);
+            if (result == FRAME_READY) {
+                handle_frame();
+                remaining = window_ms;
+            } else if (result != FRAME_INCOMPLETE) {
+                const uint8_t code = (uint8_t)result;
+                send_frame(MSG_NACK, &code, 1);
+            }
+        }
+        if (tick_elapsed()) {
+            remaining--;
+        }
     }
 }
 
@@ -67,17 +111,21 @@ int main(void)
 
     uart_init();
     uart_puts("boot: started\r\n");
-    blink_fast(5);
 
     selftest_if_button_held();
 
+    tick_init();
+    listen_for_host(LISTEN_WINDOW_MS);
+
     if (app_looks_valid()) {
+        tick_stop(); /* hand the timer back in its reset state */
         uart_puts("boot: jumping to slot A\r\n");
         jump_to_app();
     }
 
-    uart_puts("boot: no valid app, staying in bootloader\r\n");
+    uart_puts("boot: no valid app, waiting for host\r\n");
     for (;;) {
-        blink_fast(1);
+        listen_for_host(200u);
+        GPIOA_ODR ^= (1u << 5);
     }
 }

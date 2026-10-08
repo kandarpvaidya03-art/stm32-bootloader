@@ -43,3 +43,17 @@ void uart_puts(const char *s)
     while ((USART2_SR & (1u << 6)) == 0u) {
     }
 }
+
+int uart_read_byte(uint8_t *out)
+{
+    uint32_t sr = USART2_SR;
+    if ((sr & ((1u << 5) | (1u << 3))) == 0u) {
+        return 0; /* nothing received, no overrun */
+    }
+    uint8_t byte = (uint8_t)USART2_DR; /* reading DR clears both flags */
+    if ((sr & (1u << 5)) == 0u) {
+        return 0; /* overrun only: no new byte */
+    }
+    *out = byte;
+    return 1;
+}
