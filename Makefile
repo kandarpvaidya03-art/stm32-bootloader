@@ -50,6 +50,8 @@ test:
 	./build/host/test_image
 	$(HOSTCC) -Wall -Wextra -Icommon -Ithird_party/micro-ecc tests/test_image_sig.c common/image_sig.c common/sha256.c third_party/micro-ecc/uECC.c -o build/host/test_image_sig
 	./build/host/test_image_sig
+	$(HOSTCC) -Wall -Wextra -Icommon tests/test_bootplan.c common/bootplan.c -o build/host/test_bootplan
+	./build/host/test_bootplan
 
 .PHONY: test
 
