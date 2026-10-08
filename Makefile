@@ -44,6 +44,8 @@ test:
 	./build/host/test_crc32
 	$(HOSTCC) -Wall -Wextra -Icommon tests/test_frame.c common/frame.c common/crc32.c -o build/host/test_frame
 	./build/host/test_frame
+	$(HOSTCC) -Wall -Wextra -Icommon tests/test_sha256.c common/sha256.c -o build/host/test_sha256
+	./build/host/test_sha256
 
 .PHONY: test
 
