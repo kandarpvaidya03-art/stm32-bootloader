@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Build with -p:NoSerial=true to leave out the serial port (no NuGet
+       access needed); the tool then only reaches the simulator over TCP. -->
+  <PropertyGroup Condition="'$(NoSerial)' == 'true'">
+    <DefineConstants>$(DefineConstants);NO_SERIAL</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(NoSerial)' != 'true'">
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(NoSerial)' == 'true'">
+    <Compile Remove="SerialTransport.cs" />
+  </ItemGroup>
+
+</Project>

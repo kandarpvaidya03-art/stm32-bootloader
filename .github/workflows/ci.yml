@@ -41,3 +41,31 @@ jobs:
 
       - name: Build and test inside the container
         run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/work stm32-bootloader
+
+  dotnet-host-tool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install toolchain and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          pip install pyserial cryptography
+
+      - name: Build C# tool (with serial support)
+        run: dotnet build host/FwTool -c Release
+
+      - name: Build and sign images with a throwaway key
+        run: |
+          python3 tools/imgtool.py keygen keys/signing_key.pem
+          make signed
+
+      - name: C# tool against the simulator
+        run: host/integration_test.sh

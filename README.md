@@ -122,6 +122,9 @@ The host waits for each ACK before sending the next frame, because the CPU canno
 | `common/` | Code shared by bootloader, application and host tests: startup, UART, flash, CRC-32, SHA-256, framing, image checks, boot state |
 | `ld/` | Linker scripts: one memory map per program plus a shared section layout |
 | `tools/` | `imgtool.py` (pack, keygen, sign), `fwtool.py` (ping, send), `monitor.py` (serial log viewer) |
+| `host/FwTool/` | The same update tool in C# (.NET 8), see [host/README.md](host/README.md) |
+| `sim/` | Python simulator of the board with power-loss injection, see [sim/README.md](sim/README.md) |
+| `Dockerfile` | Build and test toolchain image, also run in CI |
 | `tests/` | Host-side unit tests |
 | `third_party/micro-ecc/` | Git submodule |
 
