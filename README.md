@@ -4,7 +4,7 @@ A bare-metal bootloader for the STM32F401RE (NUCLEO-F401RE) that accepts firmwar
 
 Written in C with no vendor HAL: the linker scripts, startup code, and UART, flash and timer drivers are all in this repository. The only third-party code is [micro-ecc](https://github.com/kmackay/micro-ecc) for the elliptic-curve maths.
 
-> **Status: work in progress.** The update, signature and rollback paths work on hardware. Power-loss testing, a watchdog and the timing measurements are not done yet. See [Failure-mode testing](#failure-mode-testing) and [Limitations](#limitations) for exactly what has and has not been verified.
+> **Status: work in progress.** The update, signature and rollback paths work on hardware. The watchdog-driven rollback and power-loss behaviour have been tested in the [simulator](sim/README.md) but not yet on hardware, and the timing measurements are not done yet. See [Failure-mode testing](#failure-mode-testing) and [Limitations](#limitations) for exactly what has and has not been verified.
 
 ## What it does
 
@@ -13,7 +13,8 @@ Written in C with no vendor HAL: the linker scripts, startup code, and UART, fla
 - Checks the image's SHA-256 hash and ECDSA P-256 signature against a public key compiled into the bootloader. This happens after every transfer and again on every boot.
 - Installs a verified image by backing up the current one first, then starts the new image on trial.
 - Rolls back to the backup on the next reset if the new image has not confirmed itself.
-- Ships with a Python tool that packs, signs and sends images, and host-side unit tests that run in CI.
+- Arms the independent watchdog when a new image runs on trial, so an image that hangs before confirming itself is reset and rolled back without anyone pressing reset.
+- Ships with a Python tool that packs, signs and sends images, host-side unit tests, and a [Python simulator of the board](sim/README.md) with power-loss injection. All of it runs in CI, natively and in a Docker image.
 
 ## Flash layout
 
@@ -226,16 +227,18 @@ Flash, UART and the jump to the application cannot be tested on the host. Those 
 | Tampered header | Image rejected | Tested on hardware: one flipped bit in the version field refused with `0x27` |
 | Image with no header | Image rejected | Tested on hardware: refused with `0x26` |
 | New image never confirms | Rollback to previous image | Tested on hardware: previous version restored on the next reset |
+| New image hangs on trial | Watchdog resets the board, then rollback | Simulated; not yet tested on hardware |
 | Corrupted code (bit flip in the body) | Verification fails | Covered by host test only; not yet tested on hardware |
-| Truncated transfer | Image rejected, device stays updatable | Not yet tested |
-| Power loss during flash write or install | Old image still boots | Not yet tested |
+| Truncated transfer | Image rejected, device stays updatable | Simulated; not yet tested on hardware |
+| Bit error in a frame on the wire | Frame NACKed and resent | Simulated; not yet tested on hardware |
+| Power loss during flash write or install | Old or new image still boots | Simulated at every flash operation of an update; not yet tested on hardware |
 | Older version offered | Rejected | Not implemented |
 
 ## Measurements
 
 | Metric | Value | Method |
 |---|---|---|
-| Bootloader flash footprint | 9420 bytes | `arm-none-eabi-size` (`text`), built with `-Og` |
+| Bootloader flash footprint | 9684 bytes | `arm-none-eabi-size` (`text`), built with `-Og` |
 | Bootloader static RAM | 284 bytes | `arm-none-eabi-size` (`bss`); stack use not measured |
 | Boot time with and without signature check | Not yet measured | |
 | Update time for a known image size | Not yet measured | |
@@ -264,7 +267,7 @@ For these reasons this should be described as signed firmware verification, not 
 
 ## Limitations
 
-- **Rollback needs a reset.** A new image that hangs without resetting stays hung until something resets the board. There is no watchdog yet.
+- **The watchdog only guards the trial run.** It is armed when a new image starts on trial and, once started, keeps running until the next reset, so the application must keep kicking it. A confirmed image that hangs later is not reset, because the bootloader does not arm the watchdog on normal boots. The timeout is about 4 s nominal, 2.7 to 7.5 s across the LSI oscillator's tolerance.
 - **Power-loss behaviour is untested.** The state machine is designed to repeat an interrupted step, but this has not been verified by cutting power. A power cut during the erase of the boot state sector could leave it partially erased; that case has not been analysed.
 - **Vector table relocation is untested with interrupts.** The bootloader sets `VTOR`, but the sample application does not use interrupts, so this is not exercised.
 - **Signature verification is slow.** micro-ecc runs in its portable C mode on the default 16 MHz clock, and an install performs several verifications. The time has not been measured.

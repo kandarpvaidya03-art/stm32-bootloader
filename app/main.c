@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "bootstate.h"
+#include "iwdg.h"
 #include "uart.h"
 
 #ifndef APP_VERSION
@@ -39,6 +40,8 @@ int main(void)
         }
     }
 #else
+    /* Stands in for a broken update: it never confirms and never kicks the
+     * watchdog, so on trial it is reset and rolled back. */
     uart_puts("app: this build never confirms itself\r\n");
 #endif
 
@@ -46,5 +49,8 @@ int main(void)
         GPIOA_ODR ^= (1u << 5);
         for (volatile uint32_t i = 0; i < APP_BLINK_DELAY; i++) {
         }
+#if APP_CONFIRM
+        iwdg_kick(); /* the bootloader starts the watchdog when this image is on trial */
+#endif
     }
 }

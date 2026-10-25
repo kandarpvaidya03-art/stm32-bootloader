@@ -10,8 +10,8 @@ UECC_DEFS := -DuECC_PLATFORM=0 -DuECC_SUPPORTS_secp160r1=0 -DuECC_SUPPORTS_secp1
 CFLAGS  := -mcpu=cortex-m4 -mthumb -Og -g -Wall -Wextra -ffreestanding -ffunction-sections -fdata-sections -Icommon -Ithird_party/micro-ecc $(UECC_DEFS)
 LDFLAGS := -nostartfiles -Wl,--gc-sections
 
-BOOT_OBJS := $(addprefix build/,common/startup.o common/uart.o common/tick.o common/flash.o common/frame.o common/crc32.o common/sha256.o common/image.o common/image_sig.o common/bootplan.o common/bootstate.o third_party/micro-ecc/uECC.o boot/main.o boot/selftest.o boot/update.o boot/install.o boot/pubkey.o)
-APP_OBJS  := $(addprefix build/,common/startup.o common/uart.o common/flash.o common/bootstate.o)
+BOOT_OBJS := $(addprefix build/,common/startup.o common/uart.o common/tick.o common/iwdg.o common/flash.o common/frame.o common/crc32.o common/sha256.o common/image.o common/image_sig.o common/bootplan.o common/bootstate.o third_party/micro-ecc/uECC.o boot/main.o boot/selftest.o boot/update.o boot/install.o boot/pubkey.o)
+APP_OBJS  := $(addprefix build/,common/startup.o common/uart.o common/iwdg.o common/flash.o common/bootstate.o)
 
 APPS := v1 v2 bad
 APP_VER_v1  := 1

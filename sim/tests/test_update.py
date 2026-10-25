@@ -151,3 +151,30 @@ def test_busy_while_update_pending(device, make_image, tmp_path):
     with pytest.raises(SystemExit) as exc:
         fwtool.request(link, fwtool.MSG_START, struct.pack("<II", 100, 0), timeout=1)
     assert "error 0x%02x" % sim.ERR_BUSY in str(exc.value)
+
+
+def test_watchdog_rolls_back_hung_image_without_a_reset(device, make_image, tmp_path):
+    """The trial image never kicks the watchdog. Nobody presses reset."""
+    device.reset()
+    send(SimPort(device), make_image(3, confirms=False), tmp_path)
+    device.line_quiet()
+    out = device.take_output().decode()
+    assert "watchdog armed for trial" in out and device.running_version == 3
+
+    device.wait(1.0)
+    assert device.running_version == 3  # not yet
+
+    device.wait(5.0)
+    out = device.take_output().decode()
+    assert "last reset was the watchdog" in out and "rolling back" in out
+    assert device.running_version == 1
+
+    boot(device)
+    assert device.running_version == 1 and flags_clear(device)
+
+
+def test_watchdog_not_armed_on_normal_boot(device):
+    out = boot(device)
+    assert "watchdog armed" not in out
+    device.wait(60)
+    assert device.running_version == 1

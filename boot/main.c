@@ -3,6 +3,7 @@
 #include "frame.h"
 #include "image.h"
 #include "install.h"
+#include "iwdg.h"
 #include "layout.h"
 #include "selftest.h"
 #include "tick.h"
@@ -81,6 +82,13 @@ static int update_requested(void)
     return flags.requested && !flags.trial_started;
 }
 
+static int on_trial(void)
+{
+    boot_flags_t flags;
+    bootstate_read(&flags);
+    return flags.requested && flags.trial_started && !flags.confirmed;
+}
+
 __attribute__((noreturn)) static void system_reset(void)
 {
     SCB_AIRCR = 0x05FA0004u;
@@ -110,6 +118,8 @@ __attribute__((noreturn)) static void jump_to_app(void)
     uint32_t pc = vt[1];
 
     SCB_VTOR = APP_VECTORS;
+    __asm volatile("dsb\n"
+                   "isb\n"); /* make the new vector table visible before the jump */
     __asm volatile("msr msp, %0\n"
                    "bx %1\n"
                    :
@@ -126,6 +136,9 @@ int main(void)
 
     uart_init();
     uart_puts("boot: started\r\n");
+    if (reset_was_watchdog()) {
+        uart_puts("boot: last reset was the watchdog\r\n");
+    }
 
     selftest_if_button_held();
 
@@ -140,6 +153,13 @@ int main(void)
 
     if (slot_image_ok(SLOT_A_BASE) && vectors_look_valid()) {
         tick_stop(); /* hand the timer back in its reset state */
+        if (on_trial()) {
+            /* A new image that hangs before confirming itself gets reset by the
+             * watchdog, and the next boot rolls it back. Started last, after the
+             * slow signature check, so only the application's run time counts. */
+            uart_puts("boot: watchdog armed for trial\r\n");
+            iwdg_start();
+        }
         uart_puts("boot: jumping to slot A\r\n");
         jump_to_app();
     }

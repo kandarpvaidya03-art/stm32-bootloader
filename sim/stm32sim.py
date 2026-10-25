@@ -47,6 +47,7 @@ SLOT_B_BASE, SLOT_B_SECTOR = 0x08040000, 6
 BACKUP_BASE, BACKUP_SECTOR = 0x08060000, 7
 SLOT_SIZE = 0x20000
 RAM_START, RAM_END = 0x20000000, 0x20018000
+WATCHDOG_TIMEOUT_S = 4.0  # IWDG: LSI / 64, reload 2000 (common/iwdg.c)
 
 # ---------------------------------------------------------------- image format
 
@@ -232,6 +233,9 @@ class Device:
         self.running_version = None
         self.up = None      # transfer in progress: dict(size, crc, offset)
         self.boot_count = 0
+        self.watchdog_running = False
+        self.app_kicks_watchdog = False
+        self.last_reset_watchdog = False
 
     # -------------------------------------------------- helpers
 
@@ -366,15 +370,18 @@ class Device:
 
     # -------------------------------------------------- power and reset
 
-    def reset(self):
+    def reset(self, by_watchdog=False):
         """Power-on or reset: runs boot/main.c up to the listen window."""
         self.boot_count += 1
         self.mode = "off"
         self.running_version = None
         self.up = None
+        self.watchdog_running = False  # any reset stops the IWDG
         self.parser.reset()
         try:
             self.log("boot: started")
+            if by_watchdog:
+                self.log("boot: last reset was the watchdog")
             self.install_run_pending()
             self.mode = "bootloader"
         except PowerLoss:
@@ -397,6 +404,10 @@ class Device:
         if self.mode == "waiting":
             return
         if self.image_ok(SLOT_A_BASE) and self.vectors_look_valid():
+            f = self.flags()
+            if f["requested"] and f["trial_started"] and not f["confirmed"]:
+                self.log("boot: watchdog armed for trial")
+                self.watchdog_running = True
             self.log("boot: jumping to slot A")
             try:
                 self.run_app()
@@ -415,14 +426,24 @@ class Device:
         self.running_version = version
         self.log("app: version %d running" % version)
         if NO_CONFIRM_MARKER in body:
+            self.app_kicks_watchdog = False
             self.log("app: this build never confirms itself")
             return
+        self.app_kicks_watchdog = True
         f = self.flags()
         if f["requested"] and f["trial_started"] and not f["confirmed"]:
             if self.set_flag(CONFIRMED) == 0:
                 self.log("app: update confirmed")
             else:
                 self.log("app: could not confirm update")
+
+    def wait(self, seconds):
+        """Time passes with no host traffic. Models the watchdog timeout."""
+        if self.mode == "app" and self.watchdog_running and not self.app_kicks_watchdog \
+                and seconds >= WATCHDOG_TIMEOUT_S:
+            self.reset(by_watchdog=True)
+            if self.mode == "bootloader":
+                self.line_quiet()
 
     # -------------------------------------------------- UART
 
@@ -594,9 +615,12 @@ def serve(device, port):
                     last_rx = time.monotonic()
                 except socket.timeout:
                     pass
-                if time.monotonic() - last_rx > LISTEN_WINDOW_S and \
-                        device.mode in ("bootloader", "waiting"):
+                idle = time.monotonic() - last_rx
+                if idle > LISTEN_WINDOW_S and device.mode in ("bootloader", "waiting"):
                     device.line_quiet()
+                    last_rx = time.monotonic()
+                elif idle > WATCHDOG_TIMEOUT_S and device.mode == "app":
+                    device.wait(idle)
                     last_rx = time.monotonic()
                 out = device.take_output()
                 if out:
