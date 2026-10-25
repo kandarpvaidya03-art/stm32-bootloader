@@ -1,2 +1,4 @@
 build/
 keys/
+__pycache__/
+.pytest_cache/

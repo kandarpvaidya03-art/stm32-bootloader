@@ -22,3 +22,9 @@ jobs:
 
       - name: Build bootloader and application
         run: make
+
+      - name: Install Python test dependencies
+        run: pip install pyserial cryptography pytest
+
+      - name: Simulator tests (protocol, rollback, power-loss injection)
+        run: python -m pytest -q sim/tests
