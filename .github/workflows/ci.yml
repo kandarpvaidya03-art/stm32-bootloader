@@ -28,3 +28,16 @@ jobs:
 
       - name: Simulator tests (protocol, rollback, power-loss injection)
         run: python -m pytest -q sim/tests
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build the toolchain image
+        run: docker build -t stm32-bootloader .
+
+      - name: Build and test inside the container
+        run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/work stm32-bootloader
