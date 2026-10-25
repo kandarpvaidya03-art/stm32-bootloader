@@ -17,6 +17,11 @@ MSG_END = 0x12
 MSG_ACK = 0x81
 MSG_NACK = 0x82
 
+# NACKs that mean the frame was damaged in transit and was not acted on.
+ERR_FRAME_LENGTH = 0x02
+ERR_FRAME_CRC = 0x03
+RETRYABLE_ERRORS = (ERR_FRAME_LENGTH, ERR_FRAME_CRC)
+
 
 def encode(msg_type, payload=b""):
     body = struct.pack("<BH", msg_type, len(payload)) + payload
@@ -24,8 +29,12 @@ def encode(msg_type, payload=b""):
 
 
 class Link:
-    def __init__(self, port_name):
-        self.port = serial.Serial(port_name, 115200, timeout=0.05)
+    def __init__(self, port):
+        # A port name (COM24, /dev/ttyACM0, socket://localhost:5555 for the
+        # simulator) or an already open port-like object.
+        if isinstance(port, str):
+            port = serial.serial_for_url(port, 115200, timeout=0.05)
+        self.port = port
         self.buf = bytearray()
 
     def send(self, msg_type, payload=b""):
@@ -101,6 +110,8 @@ def request(link, msg_type, payload, timeout, retries=3):
             if reply_type == MSG_ACK and len(reply) == 4:
                 return struct.unpack("<I", reply)[0]
             if reply_type == MSG_NACK and len(reply) == 1:
+                if reply[0] in RETRYABLE_ERRORS:
+                    break  # the frame was damaged on the wire: send it again
                 sys.exit("device refused message 0x%02x: error 0x%02x" % (msg_type, reply[0]))
     sys.exit("no reply to message 0x%02x after %d attempts" % (msg_type, retries))
 
@@ -137,8 +148,8 @@ def cmd_send(link, args):
     request(link, MSG_END, b"", timeout=30)
     print("image accepted: CRC matches in flash")
     print("transfer took %.2f s" % (time.monotonic() - started))
-    print("--- device output for 40 s (Ctrl+C to stop early) ---", flush=True)
-    watch_until = time.monotonic() + 40
+    print("--- device output for %d s (Ctrl+C to stop early) ---" % args.watch, flush=True)
+    watch_until = time.monotonic() + args.watch
     while time.monotonic() < watch_until:
         data = link.port.read(256)
         if data:
@@ -149,9 +160,11 @@ def cmd_send(link, args):
 
 def main():
     parser = argparse.ArgumentParser(description="STM32 bootloader host tool")
-    parser.add_argument("port", help="serial port, e.g. COM24")
+    parser.add_argument("port", help="serial port, e.g. COM24, or socket://localhost:5555 for the simulator")
     parser.add_argument("command", choices=["ping", "send"])
     parser.add_argument("image", nargs="?", help="binary image for send")
+    parser.add_argument("--watch", type=int, default=40,
+                        help="seconds to show device output after a send (default 40)")
     args = parser.parse_args()
     link = Link(args.port)
     return {"ping": cmd_ping, "send": cmd_send}[args.command](link, args)
