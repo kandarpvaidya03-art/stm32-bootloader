@@ -238,7 +238,7 @@ Flash, UART and the jump to the application cannot be tested on the host. Those 
 
 | Metric | Value | Method |
 |---|---|---|
-| Bootloader flash footprint | 9684 bytes | `arm-none-eabi-size` (`text`), built with `-Og` |
+| Bootloader flash footprint | 9700 bytes | `arm-none-eabi-size` (`text`), built with `-Og` |
 | Bootloader static RAM | 284 bytes | `arm-none-eabi-size` (`bss`); stack use not measured |
 | Boot time with and without signature check | Not yet measured | |
 | Update time for a known image size | Not yet measured | |
