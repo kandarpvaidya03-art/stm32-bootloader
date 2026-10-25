@@ -5,11 +5,8 @@
 #include "image.h"
 #include "image_sig.h"
 #include "pubkey.h"
+#include "layout.h"
 #include "uart.h"
-
-#define SLOT_B_BASE   0x08040000u
-#define SLOT_B_SECTOR 6u
-#define SLOT_SIZE     0x20000u
 
 #define MSG_START 0x10u
 #define MSG_DATA  0x11u
